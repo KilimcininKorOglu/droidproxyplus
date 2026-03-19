@@ -30,6 +30,25 @@ class ThinkingProxy {
     private(set) var isRunning = false
     private let stateQueue = DispatchQueue(label: "io.automaze.vibeproxy.thinking-proxy-state")
 
+    /// File-based debug logger (writes to /tmp/vibeproxy-debug.log)
+    private static let logFile: URL = URL(fileURLWithPath: "/tmp/vibeproxy-debug.log")
+    private static let logQueue = DispatchQueue(label: "io.automaze.vibeproxy.file-log")
+    static func fileLog(_ message: String) {
+        let timestamp = ISO8601DateFormatter().string(from: Date())
+        let line = "[\(timestamp)] \(message)\n"
+        logQueue.async {
+            if let data = line.data(using: .utf8) {
+                if let handle = try? FileHandle(forWritingTo: logFile) {
+                    handle.seekToEndOfFile()
+                    handle.write(data)
+                    handle.closeFile()
+                } else {
+                    try? data.write(to: logFile)
+                }
+            }
+        }
+    }
+
     var vercelConfig = VercelGatewayConfig(enabled: false, apiKey: "")
     
     private enum Config {
@@ -41,14 +60,16 @@ class ThinkingProxy {
         static let anthropicVersion = "2023-06-01"
 
         /// Models that support extended output (128K) and adaptive thinking
-        private static let extendedModels = ["opus-4-6", "opus-4-7", "sonnet-4-6", "sonnet-4-7"]
+        private static let adaptiveModels = ["opus-4-6", "opus-4-7", "sonnet-4-6", "sonnet-4-7"]
+
+        /// Whether the model supports adaptive thinking (Opus 4.6+, Sonnet 4.6+)
+        static func isAdaptiveModel(_ model: String) -> Bool {
+            adaptiveModels.contains(where: { model.contains($0) })
+        }
 
         /// Returns the max output token cap for a given (cleaned) model name.
         static func hardTokenCap(for model: String) -> Int {
-            if extendedModels.contains(where: { model.contains($0) }) {
-                return extendedHardTokenCap
-            }
-            return defaultHardTokenCap
+            isAdaptiveModel(model) ? extendedHardTokenCap : defaultHardTokenCap
         }
     }
     
@@ -276,16 +297,14 @@ class ThinkingProxy {
         var thinkingEnabled = false
         
         if method == "POST" && !bodyString.isEmpty {
+            ThinkingProxy.fileLog("INCOMING REQUEST: \(method) \(rewrittenPath)")
+            ThinkingProxy.fileLog("ORIGINAL BODY (first 500): \(String(bodyString.prefix(500)))")
             if let result = processThinkingParameter(jsonString: bodyString) {
                 modifiedBody = result.0
                 thinkingEnabled = result.1
+                ThinkingProxy.fileLog("MODIFIED BODY (first 500): \(String(modifiedBody.prefix(500)))")
+                ThinkingProxy.fileLog("THINKING ENABLED: \(thinkingEnabled)")
             }
-            // NOTE: Stripping cache_control fields breaks Claude's prompt caching feature,
-            // causing excessive token usage in long-running conversations.
-            // Disabled to restore prompt caching and reduce usage.
-            // if let stripped = stripCacheControl(from: modifiedBody) {
-            //     modifiedBody = stripped
-            // }
         }
         
         // Route Claude requests through Vercel AI Gateway when configured
@@ -305,57 +324,10 @@ class ThinkingProxy {
         return model.starts(with: "claude-") || model.starts(with: "gemini-claude-")
     }
 
-    /// Strips `cache_control` fields from the request body that cause 400 errors via the OAuth route
-    private func stripCacheControl(from jsonString: String) -> String? {
-        guard let jsonData = jsonString.data(using: .utf8),
-              var json = try? JSONSerialization.jsonObject(with: jsonData) as? [String: Any] else {
-            return nil
-        }
-
-        var modified = false
-
-        func stripFromDictArray(_ array: inout [[String: Any]]) {
-            for i in array.indices {
-                if array[i]["cache_control"] != nil {
-                    array[i].removeValue(forKey: "cache_control")
-                    modified = true
-                }
-                // Recurse into nested content arrays
-                if var nested = array[i]["content"] as? [[String: Any]] {
-                    stripFromDictArray(&nested)
-                    array[i]["content"] = nested
-                }
-            }
-        }
-
-        if var system = json["system"] as? [[String: Any]] {
-            stripFromDictArray(&system)
-            if modified { json["system"] = system }
-        }
-
-        if var messages = json["messages"] as? [[String: Any]] {
-            stripFromDictArray(&messages)
-            if modified { json["messages"] = messages }
-        }
-
-        if var tools = json["tools"] as? [[String: Any]] {
-            stripFromDictArray(&tools)
-            if modified { json["tools"] = tools }
-        }
-
-        guard modified else { return nil }
-
-        guard let modifiedData = try? JSONSerialization.data(withJSONObject: json),
-              let modifiedString = String(data: modifiedData, encoding: .utf8) else {
-            return nil
-        }
-
-        NSLog("[ThinkingProxy] Stripped cache_control fields from request body")
-        return modifiedString
-    }
-    
     /**
-     Processes the JSON body to add thinking parameter if model name has a thinking suffix
+     Processes the JSON body to add thinking parameter if model name has a thinking suffix.
+     Uses surgical string operations to preserve original JSON structure and key ordering,
+     which is critical for Anthropic's prompt caching (cache_control fields must be preserved).
      Returns tuple of (modifiedJSON, needsTransformation)
      */
     private func processThinkingParameter(jsonString: String) -> (String, Bool)? {
@@ -405,25 +377,18 @@ class ThinkingProxy {
                 cleanModel = String(model[..<thinkingRange.lowerBound])
             }
 
-            // --- Surgical string replacement: swap model name in original JSON ---
-            // This preserves key ordering and all other fields exactly as-is
-            var result = jsonString
-
-            // Replace model name (escape for JSON string matching)
-            let escapedModel = model.replacingOccurrences(of: "\"", with: "\\\"")
-            let escapedClean = cleanModel.replacingOccurrences(of: "\"", with: "\\\"")
-            result = result.replacingOccurrences(of: "\"\(escapedModel)\"", with: "\"\(escapedClean)\"")
+            // Surgical string replacement: swap model name preserving JSON structure
+            var result = jsonString.replacingOccurrences(of: "\"\(model)\"", with: "\"\(cleanModel)\"")
 
             if let budget = Int(budgetString), budget > 0 {
                 let modelCap = Config.hardTokenCap(for: cleanModel)
                 let effectiveBudget = min(budget, modelCap - 1)
                 if effectiveBudget != budget {
-                    NSLog("[ThinkingProxy] Adjusted thinking budget from \(budget) to \(effectiveBudget) to stay within limits (cap: \(modelCap))")
+                    NSLog("[ThinkingProxy] Adjusted thinking budget from \(budget) to \(effectiveBudget) (cap: \(modelCap))")
                 }
 
                 // Build thinking parameter JSON
-                let adaptiveModels = ["opus-4-6", "opus-4-7", "sonnet-4-6", "sonnet-4-7"]
-                let isAdaptiveModel = adaptiveModels.contains(where: { cleanModel.contains($0) })
+                let isAdaptiveModel = Config.isAdaptiveModel(cleanModel)
                 let thinkingJson: String
                 if isAdaptiveModel {
                     thinkingJson = "{\"type\":\"adaptive\"}"
@@ -432,20 +397,18 @@ class ThinkingProxy {
                     thinkingJson = "{\"type\":\"enabled\",\"budget_tokens\":\(effectiveBudget)}"
                 }
 
-                // Inject thinking parameter and adjust max_tokens via surgical insertion
-                // Insert "thinking":... right after the "model":"..." field
-                let modelField = "\"\(escapedClean)\""
-                if let modelRange = result.range(of: modelField) {
-                    let afterModel = modelRange.upperBound
-                    // Find the comma after the model value
-                    let remaining = result[afterModel...]
-                    if let commaIdx = remaining.firstIndex(of: ",") {
-                        let insertPoint = result.index(after: commaIdx)
-                        result.insert(contentsOf: "\"thinking\":\(thinkingJson),", at: insertPoint)
-                    }
+                // Inject thinking field after model field
+                result = injectJSONField(in: result, afterKey: "model", fieldName: "thinking", fieldValue: thinkingJson)
+
+                // For adaptive models, inject output_config.effort
+                if isAdaptiveModel {
+                    let effort = effortLevel ?? (cleanModel.contains("opus-4-6") ? "max" : "high")
+                    result = injectJSONField(in: result, afterKey: "thinking", fieldName: "output_config",
+                                             fieldValue: "{\"effort\":\"\(effort)\"}")
+                    ThinkingProxy.fileLog("INJECTED effort: \(effort) for model \(cleanModel)")
                 }
 
-                // Adjust max_tokens if needed
+                // Ensure max token limits exceed the thinking budget
                 let tokenHeadroom = max(Config.minimumHeadroom, Int(Double(effectiveBudget) * Config.headroomRatio))
                 let desiredMaxTokens = effectiveBudget + tokenHeadroom
                 var requiredMaxTokens = min(desiredMaxTokens, modelCap)
@@ -453,15 +416,12 @@ class ThinkingProxy {
                     requiredMaxTokens = min(effectiveBudget + 1, modelCap)
                 }
 
-                // Surgically update max_tokens or max_output_tokens if they're too low
-                result = adjustMaxTokens(in: result, field: "max_tokens", minimum: requiredMaxTokens, budget: effectiveBudget)
-                result = adjustMaxTokens(in: result, field: "max_output_tokens", minimum: requiredMaxTokens, budget: effectiveBudget)
+                result = replaceJSONIntField(in: result, key: "max_tokens",
+                                             oldValue: json["max_tokens"] as? Int, minimum: requiredMaxTokens, budget: effectiveBudget)
+                result = replaceJSONIntField(in: result, key: "max_output_tokens",
+                                             oldValue: json["max_output_tokens"] as? Int, minimum: requiredMaxTokens, budget: effectiveBudget)
 
-                if let effort = effortLevel {
-                    NSLog("[ThinkingProxy] Effort level '\(effort)' noted for model '\(cleanModel)'")
-                }
-
-                NSLog("[ThinkingProxy] Transformed model '\(model)' → '\(cleanModel)' with thinking budget \(effectiveBudget)\(effortLevel.map { ", effort: \($0)" } ?? "")")
+                NSLog("[ThinkingProxy] Transformed '\(model)' → '\(cleanModel)' with budget \(effectiveBudget)\(effortLevel.map { ", effort: \($0)" } ?? "")")
             } else {
                 NSLog("[ThinkingProxy] Stripped invalid thinking suffix from '\(model)' → '\(cleanModel)' (no thinking)")
             }
@@ -475,20 +435,37 @@ class ThinkingProxy {
         return (jsonString, false)  // No transformation needed
     }
 
-    /// Surgically adjust a numeric JSON field value if it's too low, preserving all other content
-    private func adjustMaxTokens(in jsonString: String, field: String, minimum: Int, budget: Int) -> String {
-        // Match "field_name": NUMBER pattern
-        let pattern = "\"\(field)\"\\s*:\\s*(\\d+)"
+    // MARK: - Surgical JSON string helpers
+    // These use regex to modify specific fields in-place, preserving the original JSON structure
+    // and key ordering. This is critical because JSONSerialization.data() reorders keys
+    // alphabetically, which breaks Anthropic's prompt cache matching.
+
+    /// Injects a new JSON field after a given key's value in the JSON string.
+    private func injectJSONField(in json: String, afterKey: String, fieldName: String, fieldValue: String) -> String {
+        let escapedKey = NSRegularExpression.escapedPattern(for: afterKey)
+        let valuePattern = "(?:\"(?:[^\"\\\\]|\\\\.)*\"|\\-?\\d+(?:\\.\\d+)?|\\{[^}]*\\}|\\[[^\\]]*\\]|true|false|null)"
+        let pattern = "\"\(escapedKey)\"\\s*:\\s*\(valuePattern)"
         guard let regex = try? NSRegularExpression(pattern: pattern),
-              let match = regex.firstMatch(in: jsonString, range: NSRange(jsonString.startIndex..., in: jsonString)),
-              let valueRange = Range(match.range(at: 1), in: jsonString),
-              let currentValue = Int(jsonString[valueRange]),
-              currentValue <= budget else {
-            return jsonString
+              let match = regex.firstMatch(in: json, range: NSRange(json.startIndex..., in: json)) else {
+            NSLog("[ThinkingProxy] Warning: Could not find key '\(afterKey)' for field injection")
+            return json
         }
-        var result = jsonString
-        result.replaceSubrange(valueRange, with: String(minimum))
+        let insertOffset = match.range.location + match.range.length
+        let insertIndex = json.index(json.startIndex, offsetBy: insertOffset)
+        var result = json
+        result.insert(contentsOf: ",\"\(fieldName)\":\(fieldValue)", at: insertIndex)
         return result
+    }
+
+    /// Replaces a numeric JSON field value in-place if it's below the required minimum.
+    private func replaceJSONIntField(in json: String, key: String, oldValue: Int?, minimum: Int, budget: Int) -> String {
+        guard let current = oldValue, current <= budget else { return json }
+        let escapedKey = NSRegularExpression.escapedPattern(for: key)
+        let pattern = "\"\(escapedKey)\"(\\s*:\\s*)\(current)\\b"
+        guard let regex = try? NSRegularExpression(pattern: pattern) else { return json }
+        let range = NSRange(json.startIndex..., in: json)
+        return regex.stringByReplacingMatches(in: json, range: range,
+                                              withTemplate: "\"\(key)\"$1\(minimum)")
     }
     
     /**

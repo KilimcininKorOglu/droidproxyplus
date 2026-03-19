@@ -611,6 +611,35 @@ You don't need to configure anything - when you use any `-thinking-*` model vari
 
 This is enabled by default because if you're opting into extended thinking, you almost certainly want the improved reasoning that interleaved thinking provides for tool-heavy workflows.
 
+## Recommended Settings for Peak Performance
+
+For the best experience, add the Opus 4.6 Max model directly in Factory's `settings.json` (`~/.factory/settings.json`) under `customModels`. This lets you set `maxOutputTokens` to unlock the full 128K output window, which `config.json` doesn't support:
+
+```json
+{
+  "model": "claude-opus-4-6-thinking-128000",
+  "id": "custom:CC:-Opus-4.6-(Max)-0",
+  "index": 0,
+  "baseUrl": "http://localhost:8317",
+  "apiKey": "dummy-not-used",
+  "displayName": "CC: Opus 4.6 (Max)",
+  "maxOutputTokens": 128000,
+  "noImageSupport": false,
+  "provider": "anthropic"
+}
+```
+
+Then set it as your default model in `sessionDefaultSettings`:
+
+```json
+"sessionDefaultSettings": {
+  "model": "custom:CC:-Opus-4.6-(Max)-0"
+}
+```
+
+> [!TIP]
+> The key advantage of `settings.json` over `config.json` is the `maxOutputTokens` field — without it, Factory may cap output well below the 128K that Opus 4.6 supports.
+
 ## Tips
 
 - **Launch at Login**: Enable in VibeProxy settings to auto-start the server
