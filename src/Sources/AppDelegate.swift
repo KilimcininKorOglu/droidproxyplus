@@ -22,6 +22,8 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, UNUserNoti
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        NSApp.appearance = NSAppearance(named: .darkAqua)
+        
         // Setup standard Edit menu for keyboard shortcuts (Cmd+C/V/X/A)
         setupMainMenu()
         
@@ -32,12 +34,6 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, UNUserNoti
         serverManager = ServerManager()
         thinkingProxy = ThinkingProxy()
 
-        // Sync Vercel AI Gateway config from ServerManager to ThinkingProxy
-        syncVercelConfig()
-        serverManager.onVercelConfigChanged = { [weak self] in
-            self?.syncVercelConfig()
-        }
-        
         // Warm commonly used icons to avoid first-use disk hits
         preloadIcons()
         
@@ -71,9 +67,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, UNUserNoti
         let iconsToPreload = [
             ("icon-active.png", statusIconSize),
             ("icon-inactive.png", statusIconSize),
-            ("icon-codex.png", serviceIconSize),
-            ("icon-claude.png", serviceIconSize),
-            ("icon-gemini.png", serviceIconSize)
+            ("icon-claude.png", serviceIconSize)
         ]
         
         for (name, size) in iconsToPreload {
@@ -104,9 +98,9 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, UNUserNoti
         // App menu
         let appMenuItem = NSMenuItem()
         let appMenu = NSMenu()
-        appMenu.addItem(NSMenuItem(title: "About VibeProxy", action: #selector(NSApplication.orderFrontStandardAboutPanel(_:)), keyEquivalent: ""))
+        appMenu.addItem(NSMenuItem(title: "About DroidProxy", action: #selector(NSApplication.orderFrontStandardAboutPanel(_:)), keyEquivalent: ""))
         appMenu.addItem(NSMenuItem.separator())
-        appMenu.addItem(NSMenuItem(title: "Quit VibeProxy", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"))
+        appMenu.addItem(NSMenuItem(title: "Quit DroidProxy", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"))
         appMenuItem.submenu = appMenu
         mainMenu.addItem(appMenuItem)
         
@@ -133,7 +127,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, UNUserNoti
             if let icon = IconCatalog.shared.image(named: "icon-inactive.png", resizedTo: NSSize(width: 18, height: 18), template: true) {
                 button.image = icon
             } else {
-                let fallback = NSImage(systemSymbolName: "network.slash", accessibilityDescription: "VibeProxy")
+                let fallback = NSImage(systemSymbolName: "network.slash", accessibilityDescription: "DroidProxy")
                 fallback?.isTemplate = true
                 button.image = fallback
                 NSLog("[MenuBar] Failed to load inactive icon from bundle; using fallback system icon")
@@ -201,10 +195,11 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, UNUserNoti
             backing: .buffered,
             defer: false
         )
-        window.title = "VibeProxy"
+        window.title = "DroidProxy"
         window.center()
         window.delegate = self
         window.isReleasedWhenClosed = false
+        window.backgroundColor = .black
 
         let contentView = SettingsView(serverManager: serverManager)
         window.contentView = NSHostingView(rootView: contentView)
@@ -243,7 +238,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, UNUserNoti
                     if success {
                         self?.updateMenuBarStatus()
                         // User always connects to 8317 (thinking proxy)
-                        self?.showNotification(title: "Server Started", body: "VibeProxy is now running")
+                        self?.showNotification(title: "Server Started", body: "DroidProxy is now running")
                     } else {
                         // Backend failed - stop the proxy to keep state consistent
                         self?.thinkingProxy.stop()
@@ -346,7 +341,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, UNUserNoti
         content.sound = .default
         
         let request = UNNotificationRequest(
-            identifier: "io.automaze.vibeproxy.\(UUID().uuidString)",
+            identifier: "io.automaze.droidproxy.\(UUID().uuidString)",
             content: content,
             trigger: nil
         )
@@ -425,15 +420,6 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, UNUserNoti
 
         source.resume()
         authFileMonitor = source
-    }
-
-    // MARK: - Vercel Config Sync
-
-    private func syncVercelConfig() {
-        thinkingProxy.vercelConfig = VercelGatewayConfig(
-            enabled: serverManager.vercelGatewayEnabled,
-            apiKey: serverManager.vercelApiKey
-        )
     }
 
     // MARK: - UNUserNotificationCenterDelegate

@@ -15,24 +15,17 @@ import Network
  - claude-sonnet-4-5-20250929-thinking-2000 → 2,000 token budget
  - claude-sonnet-4-5-20250929-thinking-8000 → 8,000 token budget
  */
-struct VercelGatewayConfig {
-    var enabled: Bool
-    var apiKey: String
-
-    var isActive: Bool { enabled && !apiKey.isEmpty }
-}
-
 class ThinkingProxy {
     private var listener: NWListener?
     let proxyPort: UInt16 = 8317
     private let targetPort: UInt16 = 8318
     private let targetHost = "127.0.0.1"
     private(set) var isRunning = false
-    private let stateQueue = DispatchQueue(label: "io.automaze.vibeproxy.thinking-proxy-state")
+    private let stateQueue = DispatchQueue(label: "io.automaze.droidproxy.thinking-proxy-state")
 
-    /// File-based debug logger (writes to /tmp/vibeproxy-debug.log)
-    private static let logFile: URL = URL(fileURLWithPath: "/tmp/vibeproxy-debug.log")
-    private static let logQueue = DispatchQueue(label: "io.automaze.vibeproxy.file-log")
+    /// File-based debug logger (writes to /tmp/droidproxy-debug.log)
+    private static let logFile: URL = URL(fileURLWithPath: "/tmp/droidproxy-debug.log")
+    private static let logQueue = DispatchQueue(label: "io.automaze.droidproxy.file-log")
     static func fileLog(_ message: String) {
         let timestamp = ISO8601DateFormatter().string(from: Date())
         let line = "[\(timestamp)] \(message)\n"
@@ -49,14 +42,11 @@ class ThinkingProxy {
         }
     }
 
-    var vercelConfig = VercelGatewayConfig(enabled: false, apiKey: "")
-    
     private enum Config {
         static let defaultHardTokenCap = 32_000     // Opus 4.5, Sonnet 4.5, and older
         static let extendedHardTokenCap = 128_000   // Opus 4.6+, Sonnet 4.6+ (128K output)
         static let minimumHeadroom = 1024
         static let headroomRatio = 0.1
-        static let vercelGatewayHost = "ai-gateway.vercel.sh"
         static let anthropicVersion = "2023-06-01"
 
         /// Models that support extended output (128K) and adaptive thinking
@@ -307,21 +297,7 @@ class ThinkingProxy {
             }
         }
         
-        // Route Claude requests through Vercel AI Gateway when configured
-        if vercelConfig.isActive && method == "POST" && isClaudeModelRequest(body: modifiedBody) {
-            NSLog("[ThinkingProxy] Routing Claude request via Vercel AI Gateway")
-            forwardToVercel(method: method, path: "/v1/messages", version: httpVersion, headers: headers, body: modifiedBody, thinkingEnabled: thinkingEnabled, originalConnection: connection)
-            return
-        }
-        
         forwardRequest(method: method, path: rewrittenPath, version: httpVersion, headers: headers, body: modifiedBody, thinkingEnabled: thinkingEnabled, originalConnection: connection)
-    }
-    
-    private func isClaudeModelRequest(body: String) -> Bool {
-        guard let data = body.data(using: .utf8),
-              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-              let model = json["model"] as? String else { return false }
-        return model.starts(with: "claude-") || model.starts(with: "gemini-claude-")
     }
 
     /**
@@ -623,85 +599,6 @@ class ThinkingProxy {
                 }))
             }
         }
-    }
-    
-    /**
-     Forwards Claude requests to Vercel AI Gateway (ai-gateway.vercel.sh)
-     */
-    private func forwardToVercel(method: String, path: String, version: String, headers: [(String, String)], body: String, thinkingEnabled: Bool, originalConnection: NWConnection) {
-        let tlsOptions = NWProtocolTLS.Options()
-        let parameters = NWParameters(tls: tlsOptions, tcp: NWProtocolTCP.Options())
-        
-        let endpoint = NWEndpoint.hostPort(host: NWEndpoint.Host(Config.vercelGatewayHost), port: 443)
-        let targetConnection = NWConnection(to: endpoint, using: parameters)
-        let apiKey = vercelConfig.apiKey
-        
-        targetConnection.stateUpdateHandler = { [weak self] state in
-            guard let self = self else { return }
-            switch state {
-            case .ready:
-                var forwardedRequest = "\(method) \(path) \(version)\r\n"
-                
-                let excludedHeaders: Set<String> = ["host", "content-length", "connection", "transfer-encoding", "authorization", "x-api-key"]
-                var existingBetaHeader: String? = nil
-                
-                for (name, value) in headers {
-                    let lower = name.lowercased()
-                    if excludedHeaders.contains(lower) { continue }
-                    if lower == "anthropic-beta" {
-                        existingBetaHeader = value
-                        continue
-                    }
-                    forwardedRequest += "\(name): \(value)\r\n"
-                }
-                
-                // Vercel auth
-                forwardedRequest += "x-api-key: \(apiKey)\r\n"
-                forwardedRequest += "anthropic-version: \(Config.anthropicVersion)\r\n"
-                forwardedRequest += "content-type: application/json\r\n"
-                
-                // Thinking beta header
-                if thinkingEnabled {
-                    var betaValue = BetaHeaders.interleavedThinking
-                    if let existing = existingBetaHeader, !existing.contains(BetaHeaders.interleavedThinking) {
-                        betaValue = "\(existing),\(BetaHeaders.interleavedThinking)"
-                    }
-                    forwardedRequest += "anthropic-beta: \(betaValue)\r\n"
-                } else if let existing = existingBetaHeader {
-                    forwardedRequest += "anthropic-beta: \(existing)\r\n"
-                }
-                
-                forwardedRequest += "Host: \(Config.vercelGatewayHost)\r\n"
-                forwardedRequest += "Connection: close\r\n"
-                
-                let contentLength = body.utf8.count
-                forwardedRequest += "Content-Length: \(contentLength)\r\n"
-                forwardedRequest += "\r\n"
-                forwardedRequest += body
-                
-                if let requestData = forwardedRequest.data(using: .utf8) {
-                    targetConnection.send(content: requestData, completion: .contentProcessed({ error in
-                        if let error = error {
-                            NSLog("[ThinkingProxy] Vercel send error: \(error)")
-                            targetConnection.cancel()
-                            originalConnection.cancel()
-                        } else {
-                            self.receiveResponse(from: targetConnection, originalConnection: originalConnection)
-                        }
-                    }))
-                }
-                
-            case .failed(let error):
-                NSLog("[ThinkingProxy] Vercel connection failed: \(error)")
-                self.sendError(to: originalConnection, statusCode: 502, message: "Bad Gateway - Could not connect to Vercel AI Gateway")
-                targetConnection.cancel()
-                
-            default:
-                break
-            }
-        }
-        
-        targetConnection.start(queue: .global(qos: .userInitiated))
     }
     
     private enum BetaHeaders {
