@@ -38,7 +38,7 @@ Open `~/.factory/settings.json` and add the following to the `customModels` arra
       "model": "gpt-5.3-codex",
       "id": "custom:droidproxy:gpt-5.3-codex",
       "index": 2,
-      "baseUrl": "http://localhost:8317",
+      "baseUrl": "http://localhost:8317/v1",
       "apiKey": "dummy-not-used",
       "displayName": "DroidProxy: GPT 5.3 Codex",
       "maxOutputTokens": 128000,
@@ -49,7 +49,7 @@ Open `~/.factory/settings.json` and add the following to the `customModels` arra
       "model": "gpt-5.4",
       "id": "custom:droidproxy:gpt-5.4",
       "index": 3,
-      "baseUrl": "http://localhost:8317",
+      "baseUrl": "http://localhost:8317/v1",
       "apiKey": "dummy-not-used",
       "displayName": "DroidProxy: GPT 5.4",
       "maxOutputTokens": 128000,
@@ -59,7 +59,7 @@ Open `~/.factory/settings.json` and add the following to the `customModels` arra
 ]
 ```
 
-Use the standard Claude and Codex model aliases in the `model` field. Claude entries use `provider: "anthropic"`; GPT/Codex entries use `provider: "openai"`. DroidProxy applies Claude adaptive thinking and Codex reasoning effort based on the selected model and the thinking-effort setting in DroidProxy itself; it does not use `-thinking-*` model suffixes.
+Use the standard Claude and Codex model aliases in the `model` field. Claude entries use `provider: "anthropic"` with `http://localhost:8317`; GPT/Codex entries use `provider: "openai"` with `http://localhost:8317/v1`. DroidProxy applies Claude adaptive thinking and Codex reasoning effort based on the selected model and the thinking-effort setting in DroidProxy itself; it does not use `-thinking-*` model suffixes.
 
 ## 3. Configure Thinking Effort
 

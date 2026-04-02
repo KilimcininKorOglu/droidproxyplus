@@ -19,9 +19,10 @@ All releases are code-signed and notarized by Apple. Existing installs auto-upda
 
 - **One-click OAuth auth** -- Claude Code and Codex login from the menu bar, credential monitoring, auto-refresh
 - **Adaptive thinking proxy** -- Injects `thinking: {"type":"adaptive"}` and per-model `output_config.effort` for Claude Opus 4.6 and Claude Sonnet 4.6 requests sent through `http://localhost:8317`
-- **Per-model effort controls** -- Configure Opus 4.6 (`low` / `medium` / `high` / `max`) and Sonnet 4.6 (`low` / `medium` / `high`) directly from the Settings window
+- **Codex reasoning controls** -- Injects `reasoning: {"effort":"..."}` for `gpt-5.3-codex` and `gpt-5.4` via the OpenAI-compatible `http://localhost:8317/v1` endpoint
+- **Per-model effort controls** -- Configure Opus 4.6 (`low` / `medium` / `high` / `max`), Sonnet 4.6 (`low` / `medium` / `high`), GPT 5.3 Codex (`low` / `medium` / `high` / `xhigh`), and GPT 5.4 (`low` / `medium` / `high` / `xhigh`) directly from the Settings window
 - **Sparkle auto-updates** -- Checks daily, installs in the background
-- **Factory integration** -- Use the standard Anthropic model aliases (for example `claude-opus-4-6` and `claude-sonnet-4-6`) against the local proxy
+- **Factory integration** -- Use Claude models against `http://localhost:8317` and Codex/OpenAI models against `http://localhost:8317/v1`
 
 ## Setup
 
