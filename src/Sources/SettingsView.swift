@@ -223,6 +223,7 @@ struct SettingsView: View {
     @AppStorage(AppPreferences.sonnet46ThinkingEffortKey) private var sonnet46ThinkingEffort = AppPreferences.defaultSonnet46ThinkingEffort
     @AppStorage(AppPreferences.gpt53CodexReasoningEffortKey) private var gpt53CodexReasoningEffort = AppPreferences.defaultGpt53CodexReasoningEffort
     @AppStorage(AppPreferences.gpt54ReasoningEffortKey) private var gpt54ReasoningEffort = AppPreferences.defaultGpt54ReasoningEffort
+    @AppStorage(AppPreferences.gpt54FastModeKey) private var gpt54FastMode = AppPreferences.defaultGpt54FastMode
     @State private var authenticatingService: ServiceType? = nil
     @State private var showingAuthResult = false
     @State private var authResultMessage = ""
@@ -306,12 +307,27 @@ struct SettingsView: View {
                         tint: codexEffortSelectionColor
                     )
 
-                    effortPickerRow(
-                        "GPT 5.4 reasoning effort",
-                        selection: $gpt54ReasoningEffort,
-                        options: ["low", "medium", "high", "xhigh"],
-                        tint: codexEffortSelectionColor
-                    )
+                    VStack(alignment: .leading, spacing: 6) {
+                        HStack {
+                            Text("GPT 5.4 reasoning effort")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                            Spacer()
+                            Toggle("Fast mode", isOn: $gpt54FastMode)
+                                .toggleStyle(.checkbox)
+                                .font(.caption)
+                                .help("Injects service_tier=priority for GPT 5.4 Responses API requests (Codex fast mode)")
+                        }
+                        Picker("", selection: $gpt54ReasoningEffort) {
+                            ForEach(["low", "medium", "high", "xhigh"], id: \.self) { option in
+                                Text(option).tag(option)
+                            }
+                        }
+                        .pickerStyle(.segmented)
+                        .tint(codexEffortSelectionColor)
+                        .labelsHidden()
+                    }
+                    .padding(.vertical, 2)
 
                     HStack {
                         Text("Auth files")
