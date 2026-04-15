@@ -284,15 +284,6 @@ class ThinkingProxy {
             }
         }
 
-        // Rewrite /v1/responses to /v1/chat/completions for Gemini models since
-        // CLIProxyAPIPlus does not support Gemini via the Responses API endpoint.
-        if isResponsesAPIPath(rewrittenPath) && isGeminiModel(bodyString) {
-            let newPath = rewrittenPath.replacingOccurrences(of: "/responses", with: "/chat/completions")
-            NSLog("[ThinkingProxy] Rewriting Gemini responses path: \(rewrittenPath) -> \(newPath)")
-            ThinkingProxy.fileLog("REWRITE PATH: \(rewrittenPath) -> \(newPath) (Gemini model)")
-            rewrittenPath = newPath
-        }
-
         forwardRequest(method: method, path: rewrittenPath, version: httpVersion, headers: headers, body: modifiedBody, originalConnection: connection)
     }
 
@@ -315,15 +306,6 @@ class ThinkingProxy {
                                      fieldValue: "{\"effort\":\"\(effort)\"}")
             NSLog("[ThinkingProxy] Injected Codex reasoning for '\(model)' with effort '\(effort)'")
             ThinkingProxy.fileLog("INJECTED Codex reasoning: effort=\(effort) for model \(model)")
-            return result
-        }
-
-        if let level = geminiThinkingLevel(for: model) {
-            var result = jsonString
-            result = injectJSONField(in: result, afterKey: "model", fieldName: "generationConfig",
-                                     fieldValue: "{\"thinkingConfig\":{\"thinking_level\":\"\(level)\"}}")
-            NSLog("[ThinkingProxy] Injected Gemini thinking for '\(model)' with level '\(level)'")
-            ThinkingProxy.fileLog("INJECTED Gemini thinking: level=\(level) for model \(model)")
             return result
         }
 
@@ -409,7 +391,7 @@ class ThinkingProxy {
     }
 
     private func claudeAdaptiveThinkingEffort(for model: String) -> String? {
-        guard model.starts(with: "claude-") || model.starts(with: "gemini-claude-") else {
+        guard model.starts(with: "claude-") else {
             return nil
         }
 
@@ -420,36 +402,6 @@ class ThinkingProxy {
             return AppPreferences.sonnet46ThinkingEffort
         }
         return nil
-    }
-
-    private func geminiThinkingLevel(for model: String) -> String? {
-        switch model {
-        case "gemini-3.1-pro-preview":
-            return AppPreferences.gemini31ProThinkingLevel
-        case "gemini-3-flash-preview":
-            return AppPreferences.gemini3FlashThinkingLevel
-        default:
-            return nil
-        }
-    }
-
-    private static let responsesAPIPaths: Set<String> = [
-        "/v1/responses",
-        "/api/v1/responses"
-    ]
-
-    private func isResponsesAPIPath(_ path: String) -> Bool {
-        let normalizedPath = path.split(separator: "?").first.map(String.init) ?? path
-        return Self.responsesAPIPaths.contains(normalizedPath)
-    }
-
-    private func isGeminiModel(_ bodyString: String) -> Bool {
-        guard let jsonData = bodyString.data(using: .utf8),
-              let json = try? JSONSerialization.jsonObject(with: jsonData) as? [String: Any],
-              let model = json["model"] as? String else {
-            return false
-        }
-        return model.hasPrefix("gemini-")
     }
 
     private func rewriteModelValue(in json: String, from oldModel: String, to newModel: String) -> String {

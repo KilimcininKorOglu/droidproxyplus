@@ -425,8 +425,6 @@ struct SettingsView: View {
     @AppStorage(AppPreferences.gpt54ReasoningEffortKey) private var gpt54ReasoningEffort = AppPreferences.defaultGpt54ReasoningEffort
     @AppStorage(AppPreferences.gpt53CodexFastModeKey) private var gpt53CodexFastMode = AppPreferences.defaultGpt53CodexFastMode
     @AppStorage(AppPreferences.gpt54FastModeKey) private var gpt54FastMode = AppPreferences.defaultGpt54FastMode
-    @AppStorage(AppPreferences.gemini31ProThinkingLevelKey) private var gemini31ProThinkingLevel = AppPreferences.defaultGemini31ProThinkingLevel
-    @AppStorage(AppPreferences.gemini3FlashThinkingLevelKey) private var gemini3FlashThinkingLevel = AppPreferences.defaultGemini3FlashThinkingLevel
     @AppStorage(AppPreferences.allowRemoteKey) private var allowRemote = AppPreferences.defaultAllowRemote
     @AppStorage(AppPreferences.secretKeyKey) private var secretKey = AppPreferences.defaultSecretKey
     @AppStorage(AppPreferences.claudeMaxBudgetModeKey) private var claudeMaxBudgetMode = AppPreferences.defaultClaudeMaxBudgetMode
@@ -443,10 +441,8 @@ struct SettingsView: View {
     @State private var showingMaxBudgetWarning = false
     @State private var claudeModelsExpanded = true
     @State private var codexModelsExpanded = true
-    @State private var geminiModelsExpanded = true
     private let claudeEffortSelectionColor = Color(red: 0xD9/255, green: 0x77/255, blue: 0x57/255)
     private let codexEffortSelectionColor = Color(red: 0x74/255, green: 0xAA/255, blue: 0x9C/255)
-    private let geminiEffortSelectionColor = Color(red: 0x42/255, green: 0x85/255, blue: 0xF4/255)
     private let oledWindowBackground = Color.black
     private let oledSectionBackground = Color(red: 0x12/255, green: 0x12/255, blue: 0x12/255)
     private let oledFooterText = Color(red: 0xA8/255, green: 0xA8/255, blue: 0xA8/255)
@@ -536,7 +532,7 @@ struct SettingsView: View {
                                 .font(.caption)
                         }
                         .buttonStyle(.plain)
-                        .help("Installs three devil's advocate code reviewer droids (Opus 4.6, GPT 5.4, Gemini 3.1 Pro) and their slash commands into your Factory config. Use /challenge-opus, /challenge-gpt, or /challenge-gemini in any Droid session for a cross-model second opinion on your code.")
+                        .help("Installs two devil's advocate code reviewer droids (Opus 4.6, GPT 5.4) and their slash commands into your Factory config. Use /challenge-opus or /challenge-gpt in any Droid session for a cross-model second opinion on your code.")
                         Spacer()
                         if challengerPluginInstalled {
                             HStack(spacing: 4) {
@@ -763,56 +759,6 @@ struct SettingsView: View {
                         .padding(.leading, 28)
                     }
 
-                    ServiceRow(
-                        serviceType: .gemini,
-                        iconName: "icon-gemini.png",
-                        accounts: authManager.accounts(for: .gemini),
-                        isAuthenticating: authenticatingService == .gemini,
-                        helpText: "If you have multiple GCP projects, authentication will use your default project. Set your desired project as default in Google AI Studio before connecting.",
-                        isEnabled: serverManager.isProviderEnabled("gemini"),
-                        customTitle: nil,
-                        onConnect: { connectService(.gemini) },
-                        onDisconnect: { account in disconnectAccount(account) },
-                        onToggleDisabled: { account in toggleAccountDisabled(account) },
-                        onToggleEnabled: { enabled in serverManager.setProviderEnabled("gemini", enabled: enabled) },
-                        toggleTint: geminiEffortSelectionColor,
-                        onExpandChange: { expanded in expandedRowCount += expanded ? 1 : -1 }
-                    ) { EmptyView() }
-
-                    if serverManager.isProviderEnabled("gemini") {
-                        VStack(alignment: .leading, spacing: 6) {
-                            HStack(spacing: 4) {
-                                Text("Model Settings")
-                                    .font(.caption)
-                                    .foregroundColor(.secondary)
-                                Image(systemName: geminiModelsExpanded ? "chevron.down" : "chevron.right")
-                                    .font(.caption2)
-                                    .foregroundColor(.secondary)
-                                Spacer()
-                            }
-                            .contentShape(Rectangle())
-                            .onTapGesture {
-                                withAnimation(.easeInOut(duration: 0.2)) {
-                                    geminiModelsExpanded.toggle()
-                                }
-                            }
-                            if geminiModelsExpanded {
-                                effortPickerRow(
-                                    "Gemini 3.1 Pro thinking level",
-                                    selection: $gemini31ProThinkingLevel,
-                                    options: ["low", "medium", "high"],
-                                    tint: geminiEffortSelectionColor
-                                )
-                                effortPickerRow(
-                                    "Gemini 3 Flash thinking level",
-                                    selection: $gemini3FlashThinkingLevel,
-                                    options: ["minimal", "low", "medium", "high"],
-                                    tint: geminiEffortSelectionColor
-                                )
-                            }
-                        }
-                        .padding(.leading, 28)
-                    }
                 }
                 .listRowBackground(oledSectionBackground)
             }
@@ -957,7 +903,6 @@ struct SettingsView: View {
         switch serviceType {
         case .claude: command = .claudeLogin
         case .codex: command = .codexLogin
-        case .gemini: command = .geminiLogin
         }
         
         serverManager.runAuthCommand(command) { success, output in
@@ -984,8 +929,6 @@ struct SettingsView: View {
             return "🌐 Browser opened for Claude Code authentication.\n\nPlease complete the login in your browser.\n\nThe app will automatically detect your credentials."
         case .codex:
             return "🌐 Browser opened for Codex authentication.\n\nPlease complete the login in your browser.\n\nThe app will automatically detect your credentials."
-        case .gemini:
-            return "🌐 Browser opened for Gemini authentication.\n\nPlease complete the login in your browser.\n\nThe app will automatically detect your credentials.\n\nIf having issues, run in terminal:\n/Applications/DroidProxyPlus.app/Contents/Resources/cli-proxy-api-plus --config ~/.cli-proxy-api/merged-config.yaml -login"
         }
     }
     
@@ -1060,26 +1003,6 @@ struct SettingsView: View {
             "noImageSupport": false,
             "provider": "openai"
         ],
-        [
-            "model": "gemini-3.1-pro-preview",
-            "id": "custom:droidproxyplus:gemini-3.1-pro",
-            "baseUrl": "http://localhost:8317",
-            "apiKey": "dummy-not-used",
-            "displayName": "DroidProxyPlus: Gemini 3.1 Pro",
-            "maxOutputTokens": 65536,
-            "noImageSupport": false,
-            "provider": "google"
-        ],
-        [
-            "model": "gemini-3-flash-preview",
-            "id": "custom:droidproxyplus:gemini-3-flash",
-            "baseUrl": "http://localhost:8317",
-            "apiKey": "dummy-not-used",
-            "displayName": "DroidProxyPlus: Gemini 3 Flash",
-            "maxOutputTokens": 65536,
-            "noImageSupport": false,
-            "provider": "google"
-        ]
     ]
 
     private func factorySettingsURL() -> URL {
@@ -1092,7 +1015,6 @@ struct SettingsView: View {
         guard let name = model["model"] as? String else { return nil }
         if name.hasPrefix("claude") { return "claude" }
         if name.hasPrefix("gpt") { return "codex" }
-        if name.hasPrefix("gemini") { return "gemini" }
         return nil
     }
 
@@ -1237,41 +1159,6 @@ struct SettingsView: View {
         **What's Actually Good:**
         - <acknowledge solid decisions so feedback is balanced>
         """),
-        ("droids", "challenger-gemini.md", """
-        ---
-        name: challenger-gemini
-        description: Devil's advocate code reviewer that challenges decisions, critiques patterns, and suggests better alternatives. Use when you want a tough second opinion on code, architecture, or design choices.
-        model: custom:droidproxyplus:gemini-3.1-pro
-        tools: ["Read", "LS", "Grep", "Glob", "WebSearch", "FetchUrl"]
-        ---
-
-        You are a senior engineer playing devil's advocate. Your job is to challenge every code decision presented to you and push for better alternatives. You are constructive but relentless.
-
-        When reviewing code or decisions:
-
-        1. **Question the "why"** - Don't accept decisions at face value. Ask why this approach was chosen over alternatives.
-        2. **Find the tradeoffs** - Every decision has costs. Surface the ones the author may not have considered.
-        3. **Suggest concrete alternatives** - Don't just criticize; propose better approaches with reasoning.
-        4. **Stress-test edge cases** - Think about failure modes, scale, concurrency, and maintainability.
-        5. **Challenge patterns** - If a pattern is used, question whether it's the right abstraction or if it adds unnecessary complexity.
-        6. **Check for over-engineering** - Call out when something is more complex than it needs to be.
-        7. **Check for under-engineering** - Call out when shortcuts will cause pain later.
-
-        If needed, use web search to back up your arguments with industry best practices, known pitfalls, or better patterns from well-regarded projects.
-
-        Respond with:
-
-        **Verdict:** <one-line overall assessment>
-
-        **Challenges:**
-        - <decision challenged>: <why it's questionable> \u{2192} <suggested alternative>
-
-        **Edge Cases / Risks:**
-        - <scenario that could break or degrade>
-
-        **What's Actually Good:**
-        - <acknowledge solid decisions so feedback is balanced>
-        """),
         ("commands", "challenge-opus.md", """
         ---
         description: Summon the Challenger droid (Opus) to review code, decisions, and design
@@ -1304,22 +1191,6 @@ struct SettingsView: View {
 
         Keep the summary concise and actionable. Focus on real issues, not nitpicks.
         """),
-        ("commands", "challenge-gemini.md", """
-        ---
-        description: Summon the Challenger droid (Gemini) to review code, decisions, and design
-        ---
-
-        Launch the challenger-gemini droid to review the current code changes, decisions, or design being discussed in this conversation.
-
-        Steps:
-        1. Gather context: run `git diff` (or use the recent conversation context) to understand what's being reviewed.
-        2. Use the Task tool to launch the subagent:
-           - `challenger-gemini`
-        3. Pass it the relevant code, design decisions, or architecture being discussed.
-        4. Once it responds, present a summary of findings and actionable items.
-
-        Keep the summary concise and actionable. Focus on real issues, not nitpicks.
-        """)
     ]
 
     private func checkChallengerPluginInstalled() -> Bool {
@@ -1352,7 +1223,7 @@ struct SettingsView: View {
             }
             challengerPluginInstalled = true
             authResultSuccess = true
-            authResultMessage = "Challenger droids and slash commands installed.\n\nUse /challenge-opus, /challenge-gpt, or /challenge-gemini in any Droid session."
+            authResultMessage = "Challenger droids and slash commands installed.\n\nUse /challenge-opus or /challenge-gpt in any Droid session."
             showingAuthResult = true
             NSLog("[SettingsView] Challenger plugin installed to ~/.factory")
         } catch {

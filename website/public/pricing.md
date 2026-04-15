@@ -4,7 +4,7 @@
 - **Price**: $0 / forever
 - **Limits**: Unlimited
 - **Features**:
-  - One-click OAuth for Claude Code, Codex, and Gemini
+  - One-click OAuth for Claude Code and Codex
   - Adaptive thinking proxy
   - Per-model effort controls
   - Sparkle auto-updates

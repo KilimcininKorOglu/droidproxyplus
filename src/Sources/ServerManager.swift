@@ -75,8 +75,7 @@ class ServerManager: ObservableObject {
     /// OAuth provider keys used in config.yaml oauth-excluded-models
     static let oauthProviderKeys: [String: String] = [
         "claude": "claude",
-        "codex": "codex",
-        "gemini": "gemini-cli"
+        "codex": "codex"
     ]
 
     init() {
@@ -266,8 +265,6 @@ class ServerManager: ObservableObject {
             authProcess.arguments = ["--config", configPath, "-claude-login"]
         case .codexLogin:
             authProcess.arguments = ["--config", configPath, "-codex-login"]
-        case .geminiLogin:
-            authProcess.arguments = ["--config", configPath, "-login"]
         }
 
         // Create pipes for output
@@ -287,19 +284,6 @@ class ServerManager: ObservableObject {
                     if let data = "\n".data(using: .utf8) {
                         try? inputPipe.fileHandleForWriting.write(contentsOf: data)
                         NSLog("[Auth] Sent newline to keep Codex login waiting for callback")
-                    }
-                }
-            }
-        }
-
-        // For Gemini login, send "2" after OAuth completes to select Google One (personal account)
-        // OAuth typically completes within 15-20 seconds
-        if case .geminiLogin = command {
-            DispatchQueue.global(qos: .userInitiated).asyncAfter(deadline: .now() + 20.0) {
-                if authProcess.isRunning {
-                    if let data = "2\n".data(using: .utf8) {
-                        try? inputPipe.fileHandleForWriting.write(contentsOf: data)
-                        NSLog("[Auth] Sent '2' to select Google One")
                     }
                 }
             }
@@ -485,5 +469,4 @@ oauth-excluded-models:
 enum AuthCommand: Equatable {
     case claudeLogin
     case codexLogin
-    case geminiLogin
 }

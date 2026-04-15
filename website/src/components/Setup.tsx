@@ -54,7 +54,7 @@ export default function Setup() {
                   <div>
                     <h4 className="font-medium mb-2">Sign into Your Providers</h4>
                     <p className="text-sm text-apple-gray-500 dark:text-apple-gray-400 mb-3">
-                      Sign in to Claude, Codex, or Gemini. A browser window will open automatically.
+                      Sign in to Claude or Codex. A browser window will open automatically.
                     </p>
                   </div>
                 </div>
@@ -122,26 +122,6 @@ export default function Setup() {
     "maxOutputTokens": 128000,
     "provider": "openai"
   },
-  {
-    "model": "gemini-3.1-pro-preview",
-    "id": "custom:droidproxyplus:gemini-3.1-pro",
-    "index": 4,
-    "baseUrl": "http://localhost:8317/v1",
-    "apiKey": "***",
-    "displayName": "DroidProxyPlus: Gemini 3.1 Pro",
-    "maxOutputTokens": 65536,
-    "provider": "openai"
-  },
-  {
-    "model": "gemini-3-flash-preview",
-    "id": "custom:droidproxyplus:gemini-3-flash",
-    "index": 5,
-    "baseUrl": "http://localhost:8317/v1",
-    "apiKey": "***",
-    "displayName": "DroidProxyPlus: Gemini 3 Flash",
-    "maxOutputTokens": 65536,
-    "provider": "openai"
-  }
 ]`}</pre>
               </div>
             </div>

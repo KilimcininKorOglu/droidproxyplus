@@ -8,7 +8,7 @@ const features = [
       </svg>
     ),
     title: 'One-Click OAuth',
-    description: 'Authenticate with Claude Code, Codex, and Gemini instantly from your menu bar. No terminal commands or manual token handling.'
+    description: 'Authenticate with Claude Code and Codex instantly from your menu bar. No terminal commands or manual token handling.'
   },
   {
     icon: (
@@ -26,7 +26,7 @@ const features = [
       </svg>
     ),
     title: 'Per-Model Effort Controls',
-    description: 'Fine-tune response quality vs speed with model-specific effort settings. Opus 4.6, Sonnet 4.6, GPT 5.3 Codex, GPT 5.4, Gemini 3.1 Pro, and Gemini 3 Flash supported.'
+    description: 'Fine-tune response quality vs speed with model-specific effort settings. Opus 4.6, Sonnet 4.6, GPT 5.3 Codex, and GPT 5.4 supported.'
   },
   {
     icon: (
@@ -108,14 +108,6 @@ export default function Features() {
                 <div>
                   <span className="font-medium">GPT 5.4</span>
                   <span className="text-apple-gray-400 ml-2">low / medium / high / xhigh</span>
-                </div>
-                <div>
-                  <span className="font-medium">Gemini 3.1 Pro</span>
-                  <span className="text-apple-gray-400 ml-2">low / medium / high</span>
-                </div>
-                <div>
-                  <span className="font-medium">Gemini 3 Flash</span>
-                  <span className="text-apple-gray-400 ml-2">minimal / low / medium / high</span>
                 </div>
               </div>
             </div>

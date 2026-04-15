@@ -14,7 +14,7 @@ export default function Hero() {
             </h1>
             
             <p className="text-xl lg:text-2xl text-apple-gray-500 dark:text-apple-gray-400 mb-4 leading-relaxed">
-              One-click OAuth proxy for Claude Code, Codex & Gemini
+              One-click OAuth proxy for Claude Code & Codex
             </p>
             
             <p className="text-base text-apple-gray-400 dark:text-apple-gray-500 mb-8 max-w-lg mx-auto lg:mx-0">
